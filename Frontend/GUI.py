@@ -193,8 +193,11 @@ class InitialScreen(QWidget):
         desktop = QApplication.desktop()
         screen_width = desktop.screenGeometry().width()
         screen_height = desktop.screenGeometry().height()
+
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
+
+        # GIF
         gif_label = QLabel()
         movie = QMovie(GraphicsDirectoryPath('Jarvis.gif'))
         gif_label.setMovie(movie)
@@ -204,47 +207,80 @@ class InitialScreen(QWidget):
         gif_label.setAlignment(Qt.AlignCenter)
         movie.start()
         gif_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.icon_label = QLabel()
-        pixmap = QPixmap(GraphicsDirectoryPath('Mic_on.png'))
-        new_pixmap = pixmap.scaled(60, 60)
-        self.icon_label.setPixmap(new_pixmap)
-        self.icon_label.setFixedSize(150, 150)
-        self.icon_label.setAlignment(Qt.AlignCenter)
-        self.toggled = True
-        self.toggle_icon()
-        self.icon_label.mousePressEvent = self.toggle_icon
+
+        # Status
         self.label = QLabel("")
         self.label.setStyleSheet("color: white; font-size:16px; margin-bottom:0;")
+        self.label.setAlignment(Qt.AlignCenter)
+
+        
+        prompt_container = QWidget()
+        prompt_container.setFixedWidth(int(screen_width * 0.5))
+        prompt_row = QHBoxLayout(prompt_container)
+        prompt_row.setContentsMargins(0, 0, 0, 0)
+        prompt_row.setSpacing(8)
+
+        self.mic_button = QPushButton()
+        self.mic_button.setIcon(QIcon(GraphicsDirectoryPath("Mic_on.png")))
+        self.mic_button.setIconSize(QSize(50, 40))
+        self.mic_button.setStyleSheet("background: transparent; border: none;")
+        self.toggled = True
+        self._toggle_mic()  # init state
+        self.mic_button.clicked.connect(self._toggle_mic)
+
+        self.prompt_input = QLineEdit()
+        self.prompt_input.setPlaceholderText("Ask anything")
+        self.prompt_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #1e1e1e;
+                border-radius: 20px;
+                padding: 10px;
+                color: white;
+                font-size: 16px;
+                border: 1px solid #333;
+            }
+        """)
+        # send typed prompt for backend to pick up
+        self.prompt_input.returnPressed.connect(self._submit_prompt)
+
+        prompt_row.addWidget(self.mic_button, 0)
+        prompt_row.addWidget(self.prompt_input, 1)
+
         content_layout.addWidget(gif_label, alignment=Qt.AlignCenter)
         content_layout.addWidget(self.label, alignment=Qt.AlignCenter)
-        content_layout.addWidget(self.icon_label, alignment=Qt.AlignCenter)
+        content_layout.addWidget(prompt_container, alignment=Qt.AlignCenter)
         content_layout.setContentsMargins(0, 0, 0, 150)
+
         self.setLayout(content_layout)
         self.setFixedHeight(screen_height)
         self.setFixedWidth(screen_width)
         self.setStyleSheet("background-color: black;")
+
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.SpeechRecogText)
         self.timer.start(5)
+
+    def _submit_prompt(self):
+        text = self.prompt_input.text().strip()
+        if not text:
+            return
+        with open(TempDirectoryPath('Prompt.data'), "w", encoding='utf-8') as f:
+            f.write(text)
+        self.prompt_input.clear()
+
+    def _toggle_mic(self, event=None):
+        if self.toggled:
+            self.mic_button.setIcon(QIcon(GraphicsDirectoryPath("Mic_on.png")))
+            MicButtonInitialed()
+        else:
+            self.mic_button.setIcon(QIcon(GraphicsDirectoryPath("Mic_off.png")))
+            MicButtonClosed()
+        self.toggled = not self.toggled
 
     def SpeechRecogText(self):
         with open(TempDirectoryPath('Status.data'), "r", encoding='utf-8') as file:
             messages = file.read()
             self.label.setText(messages)
-
-    def load_icon(self, path, width=60, height=60):
-        pixmap = QPixmap(path)
-        new_pixmap = pixmap.scaled(width, height)
-        self.icon_label.setPixmap(new_pixmap)
-
-    def toggle_icon(self, event=None):
-        if self.toggled:
-            self.load_icon(GraphicsDirectoryPath('Mic_on.png'), 60, 60)
-            MicButtonInitialed()
-        else:
-            self.load_icon(GraphicsDirectoryPath('Mic_off.png'), 60, 60)
-            MicButtonClosed()
-        self.toggled = not self.toggled
 
 class MessageScreen(QWidget):
 
