@@ -61,6 +61,7 @@ def ChatLogIntegration():
 def ShowChatsOnGUI():
     File = open(TempDirectoryPath('Database.data'), "r", encoding='utf-8')
     Data = File.read()
+    
     if len(str(Data)) > 0:
         lines = Data.split('\n')
         result = '\n'.join(lines)
@@ -75,8 +76,30 @@ def InitialExecution():
     ShowDefaultChatIfNoChats()
     ChatLogIntegration()
     ShowChatsOnGUI()
+    
 
 InitialExecution()
+
+
+def PopTypedPrompt():
+    path = TempDirectoryPath('Prompt.data')
+    try:
+        with open(path, "r", encoding='utf-8') as f:
+            txt = f.read().strip()
+    except FileNotFoundError:
+        return ""
+    # clear after reading
+    with open(path, "w", encoding='utf-8') as f:
+        f.write("")
+    return txt
+
+def HasTypedPrompt():
+    path = TempDirectoryPath('Prompt.data')
+    try:
+        with open(path, "r", encoding='utf-8') as f:
+            return len(f.read().strip()) > 0
+    except FileNotFoundError:
+        return False
 
 def MainExecution():
 
@@ -84,12 +107,15 @@ def MainExecution():
     ImageExecution = False
     ImageGenerationQuery = ""
 
-    
     SetAssistantStatus("Listening ...")
-    TextToSpeech(f"Listening")
     
-    
-    Query = SpeechRecognition()
+
+    # PRIORITY: typed prompt (always preferred, regardless of mic state)
+    Query = PopTypedPrompt()
+    if not Query:
+        # fall back to voice only when no typed prompt waiting
+        Query = SpeechRecognition()
+
     ShowTextToScreen(f"{Username} : {Query}")
     SetAssistantStatus("Thinking ...")
     Decision = FirstLayerDMM(Query)
@@ -119,7 +145,7 @@ def MainExecution():
 
     if ImageExecution == True:
         try:
-            TextToSpeech("Alright. Generating image for you now.")
+            TextToSpeech("Alright. Generating image.")
             image_gen_path = os.path.join("Frontend", "Files", "ImageGeneration.data")
             os.makedirs(os.path.dirname(image_gen_path), exist_ok=True)
             with open(image_gen_path, "w", encoding='utf-8') as file:
@@ -178,16 +204,20 @@ def MainExecution():
                 os._exit(1)
 
 def FirstThread():
+    # Process typed prompts IMMEDIATELY; otherwise defer to mic status.
     while True:
-        CurrentStatus = GetMicrophoneStatus()
-        if CurrentStatus == "True":
-            MainExecution()
+        if HasTypedPrompt():
+            MainExecution()                   # runs typed prompt path
+        elif GetMicrophoneStatus() == "True":
+            MainExecution()                   # runs voice path
         else:
             AIStatus = GetAssistantStatus()
             if "Available..." in AIStatus:
-                sleep(0.1)
+                sleep(0.05)
             else:
                 SetAssistantStatus("Available...")
+        # tiny yield to avoid busy-spin & reduce latency jitter
+        sleep(0.02)
 
 def SecondThread():
     GraphicalUserInterface()
